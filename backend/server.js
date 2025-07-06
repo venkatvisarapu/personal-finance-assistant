@@ -2,6 +2,8 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const fs = require("fs"); // We need the 'fs' module to interact with the file system
+const path = require("path"); // We need the 'path' module to handle file paths correctly
 const connectDB = require("./config/db");
 
 dotenv.config();
@@ -9,31 +11,38 @@ connectDB();
 
 const app = express();
 
-// --- !! THE FINAL, SIMPLIFIED CORS FIX !! ---
-// This setup explicitly allows your Vercel frontend to communicate with the backend.
+// --- !! GUARANTEED CORS & FILE SYSTEM FIX !! ---
 
-// We will allow requests only from our live frontend URL.
-const allowedOrigins = ['https://personal-finance-assistant-ecru.vercel.app'];
+// 1. Ensure the 'uploads' directory exists before starting the server.
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+  console.log("Created 'uploads' directory.");
+}
+
+// 2. Set up a robust CORS policy.
+const allowedOrigins = [
+  'https://personal-finance-assistant-ecru.vercel.app', // Your Vercel frontend URL
+  'http://localhost:3000'                                 // Your local development URL
+];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // In development, the 'origin' might be undefined for server-to-server requests or tools.
-    // We allow our specific frontend URL.
+    // Allow requests from our list and also allow requests with no origin (e.g., Postman, mobile apps)
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true, // This allows cookies and authorization headers to be sent.
+  credentials: true,
 };
 
 // Use the CORS options in your app
 app.use(cors(corsOptions));
 
-// Some browsers send an OPTIONS request (a "preflight" request) before POST, PUT, DELETE etc.
-// to check if the server will accept the actual request. We need to handle this.
-app.options('*', cors(corsOptions)); // This tells the server to respond "OK" to any preflight request from our allowed origin.
+// Explicitly handle preflight (OPTIONS) requests. This is crucial for file uploads.
+app.options('*', cors(corsOptions));
 
 
 // letting our app understand JSON data from requests
@@ -50,5 +59,5 @@ app.get("/", (req, res) => {
 });
 
 // setting the port to run the server on
-const PORT = process.env.PORT || 10000; // Render uses port 10000 by default
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
