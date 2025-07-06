@@ -2,30 +2,35 @@
 
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require("fs");
+const https = require("https");
 
-// Initialize the Gemini client with your API key from the .env file
+// initialize Gemini client with the API key from environment variables
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// This helper function reads a file from your server and converts it into
-// the base64 format that the Gemini API needs to see images or PDFs.
+// helper function to convert file to base64 format for Gemini
 function fileToGenerativePart(path, mimeType) {
+  console.log("Checking if file exists at:", path);
   if (!fs.existsSync(path)) {
     throw new Error("File not found for Gemini processing.");
   }
+
+  const base64Data = fs.readFileSync(path).toString("base64");
+  console.log("File read and converted to base64.");
+
   return {
     inlineData: {
-      data: fs.readFileSync(path).toString("base64"),
+      data: base64Data,
       mimeType,
     },
   };
 }
 
+// main function to send image/pdf to Gemini and parse the structured data
 async function analyzeReceiptWithGemini(filePath, mimeType) {
-  // --- !! THE CRITICAL FIX !! ---
-  // Using the model Google now recommends for this task: 'gemini-1.5-flash-latest'
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+  // ✅ use stable model name (avoid -latest in production)
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  // This is the instruction we give to the AI.
+  // prompt that instructs Gemini to return only structured JSON
   const prompt = `
     Analyze the following receipt image. Extract the information and respond ONLY with a valid JSON object.
     Do not include any text, markdown, or the word "json" outside of the JSON structure.
@@ -36,7 +41,7 @@ async function analyzeReceiptWithGemini(filePath, mimeType) {
     - "total_amount": The final total amount as a number. If not found, use null.
     - "suggested_category": A likely category like "Groceries", "Dining", "Gas", "Shopping", or "Other".
 
-    Example response:
+    Example:
     {
       "merchant_name": "SUNRISE ENTERPRISE",
       "transaction_date": "2025-01-10",
@@ -45,25 +50,33 @@ async function analyzeReceiptWithGemini(filePath, mimeType) {
     }
   `;
 
-  const imagePart = fileToGenerativePart(filePath, mimeType);
+  // try converting image
+  let imagePart;
+  try {
+    imagePart = fileToGenerativePart(filePath, mimeType);
+  } catch (err) {
+    console.error("File processing error:", err.message);
+    throw new Error("Uploaded file could not be read. Try re-uploading.");
+  }
 
   try {
-    // We send the text prompt and the image part together in an array.
+    console.log("Sending prompt to Gemini...");
     const result = await model.generateContent([prompt, imagePart]);
+
     const response = await result.response;
     let text = response.text();
 
-    // Clean up the response to ensure it's just the JSON object.
+    console.log("Raw AI response:", text);
+
+    // clean up extra formatting
     text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    
-    // Parse the cleaned text into a JavaScript object.
+
     const data = JSON.parse(text);
 
     const totalAmount = data.total_amount ? parseFloat(data.total_amount) : null;
 
-    let transactionDate = new Date(); // Default to today
+    let transactionDate = new Date(); // fallback
     if (data.transaction_date) {
-      // Create a date object, ensuring it's handled correctly across timezones.
       const parsedDate = new Date(data.transaction_date);
       if (!isNaN(parsedDate.getTime())) {
         transactionDate = new Date(parsedDate.getUTCFullYear(), parsedDate.getUTCMonth(), parsedDate.getUTCDate());
@@ -74,19 +87,27 @@ async function analyzeReceiptWithGemini(filePath, mimeType) {
       throw new Error("AI could not determine a valid total amount from the receipt.");
     }
 
-    // Return a clean object for our backend to use.
     return {
       amount: totalAmount,
       date: transactionDate,
-      description: data.merchant_name || 'Scanned Receipt',
-      category: data.suggested_category || 'Uncategorized',
+      description: data.merchant_name || "Scanned Receipt",
+      category: data.suggested_category || "Uncategorized",
     };
   } catch (error) {
-    console.error("Gemini API Error or JSON Parsing Error:", error);
+    console.error("Gemini API or JSON parsing error:", error);
+
+    // if invalid response format
     if (error instanceof SyntaxError) {
       throw new Error("AI returned a response in an invalid format.");
     }
-    // This will catch the 404 error if the model name is wrong again.
+
+    // Optional: test if Render blocks outbound access
+    https.get("https://generativelanguage.googleapis.com/", (res) => {
+      console.log("Gemini API reachable? Status code:", res.statusCode);
+    }).on("error", (e) => {
+      console.error("Network issue from Render:", e.message);
+    });
+
     throw new Error("Failed to analyze receipt with AI. The service may be busy or the model is unavailable.");
   }
 }
