@@ -2,7 +2,6 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
-const path = require("path");
 const connectDB = require("./config/db");
 
 dotenv.config();
@@ -10,35 +9,37 @@ connectDB();
 
 const app = express();
 
-// --- !! THE FINAL CORS FIX !! ---
-// This setup is crucial for a secure production deployment.
-// It explicitly tells the backend which frontend URLs are allowed to make requests.
+// --- !! THE FINAL, SIMPLIFIED CORS FIX !! ---
+// This setup explicitly allows your Vercel frontend to communicate with the backend.
 
-const allowedOrigins = [
-  'https://your-vercel-frontend-url.vercel.app', // Your Vercel frontend URL
-  'http://localhost:3000'                      // Your local development URL
-];
+// We will allow requests only from our live frontend URL.
+const allowedOrigins = ['https://personal-finance-assistant-ecru.vercel.app'];
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+  origin: (origin, callback) => {
+    // In development, the 'origin' might be undefined for server-to-server requests or tools.
+    // We allow our specific frontend URL.
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
-    return callback(null, true);
-  }
+  },
+  credentials: true, // This allows cookies and authorization headers to be sent.
 };
 
 // Use the CORS options in your app
 app.use(cors(corsOptions));
 
+// Some browsers send an OPTIONS request (a "preflight" request) before POST, PUT, DELETE etc.
+// to check if the server will accept the actual request. We need to handle this.
+app.options('*', cors(corsOptions)); // This tells the server to respond "OK" to any preflight request from our allowed origin.
 
-// letting our app understand JSON data
+
+// letting our app understand JSON data from requests
 app.use(express.json());
 
-// telling our app to use our defined routes
+// telling our app to use our defined API routes
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/transactions", require("./routes/transactionRoutes"));
 app.use("/api/uploads", require("./routes/uploadRoutes"));
@@ -49,5 +50,5 @@ app.get("/", (req, res) => {
 });
 
 // setting the port to run the server on
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 10000; // Render uses port 10000 by default
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
