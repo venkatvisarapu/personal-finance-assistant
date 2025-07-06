@@ -13,12 +13,27 @@ connectDB();
 
 const app = express();
 
-// allowing our frontend to talk to our backend
-// In production, we should be more specific for security.
+// --- !! THE FIX !! ---
+// We are updating the "guest list" (allowed origins) for our server.
+// It now explicitly includes the URL of your deployed Vercel frontend.
+const allowedOrigins = [
+    'https://personal-finance-assistant-ecru.vercel.app', // Your Vercel Frontend URL
+    'https://personal-finance-assistant-irzy.onrender.com', // Your Render Backend URL
+    'http://localhost:5173', // For local development (Vite)
+    'http://localhost:3000'  // For local development (if using Create React App)
+];
+
 const corsOptions = {
-    origin: process.env.NODE_ENV === 'production' 
-        ? 'https://personal-finance-assistant-irzy.onrender.com'
-        : 'http://localhost:3000',
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
     credentials: true
 };
 app.use(cors(corsOptions));
@@ -30,12 +45,10 @@ app.use(express.json());
 // telling our app to use our defined routes
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/transactions", require("./routes/transactionRoutes"));
-app.use("/api/uploads", require("./routes/uploadRoutes"));
+// Corrected the upload route path from your provided code
+app.use("/api/upload", require("./routes/uploadRoutes")); 
 
-// --- !! THE FIX !! ---
-// We remove the block of code that tries to serve the frontend files.
 // The backend's only job is to be an API. Vercel will handle serving the frontend.
-
 // A simple welcome message for the root of the API
 app.get("/", (req, res) => {
     res.send("Personal Finance Assistant API is running...");
