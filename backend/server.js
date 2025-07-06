@@ -1,39 +1,47 @@
 // this is the main starting point for our backend server
 
 const express = require("express");
-const dotenv = require("dotenv");
+const dotenv =require("dotenv");
 const cors = require("cors");
 const path = require("path");
 const connectDB = require("./config/db");
 
-// load environment variables from .env file
+// setting up environment variables from the .env file
 dotenv.config();
-
-// connect to MongoDB
+// connecting to our MongoDB database
 connectDB();
 
-// make the express app
 const app = express();
 
-// allow frontend to make requests (needed for localhost dev)
-app.use(cors());
+// allowing our frontend to talk to our backend
+// In production, we should be more specific for security.
+const corsOptions = {
+    origin: process.env.NODE_ENV === 'production' 
+        ? 'https://your-vercel-frontend-url.vercel.app' // Replace this with your actual Vercel URL
+        : 'http://localhost:3000',
+    credentials: true
+};
+app.use(cors(corsOptions));
 
-// let our server understand JSON in requests
+
+// letting our app understand JSON data
 app.use(express.json());
 
-// attach our API routes
+// telling our app to use our defined routes
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/transactions", require("./routes/transactionRoutes"));
 app.use("/api/uploads", require("./routes/uploadRoutes"));
 
-// this is for production — it serves the frontend build files
-if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "../frontend/dist")));
-  app.get("*", (req, res) =>
-    res.sendFile(path.resolve(__dirname, "../frontend/dist", "index.html"))
-  );
-}
+// --- !! THE FIX !! ---
+// We remove the block of code that tries to serve the frontend files.
+// The backend's only job is to be an API. Vercel will handle serving the frontend.
 
-// start the server on port (default 5001)
+// A simple welcome message for the root of the API
+app.get("/", (req, res) => {
+    res.send("Personal Finance Assistant API is running...");
+});
+
+
+// setting the port to run the server on
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
