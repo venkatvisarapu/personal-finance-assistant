@@ -17,7 +17,7 @@ const app = express();
 // In production, we should be more specific for security.
 const corsOptions = {
     origin: process.env.NODE_ENV === 'production' 
-        ? 'https://your-vercel-frontend-url.vercel.app' // Replace this with your actual Vercel URL
+        ? 'https://personal-finance-assistant-irzy.onrender.com'
         : 'http://localhost:3000',
     credentials: true
 };
