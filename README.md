@@ -3,6 +3,12 @@
 This is a full-stack MERN (MongoDB, Express, React, Node.js) application designed to help users track, manage, and understand their financial activities. It features AI-powered receipt scanning, data visualization, and a clean, multi-user interface.
 
 ---
+## 🎥 Video Demonstration
+
+**[Watch a full demonstration of the application on YouTube](https://www.youtube.com/watch?v=em9ORzS0rxg)**
+
+---
+
 
 ## Features
 
